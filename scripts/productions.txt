@@ -1,5 +1,0 @@
-expression -> grouped | unary | binary | literal
-grouped    -> "(" expression ")"
-unary      -> operator expression | expression operator             # for both -a and a++/a--
-binary     -> expression operator expression
-literal    -> INT | FLOAT | STRING | "false" | "true"

@@ -3,7 +3,21 @@
 #include <fstream>
 #include <cctype>
 #include "error_handler.h"
-
+/*
+Implementation of the tokenizer class here in ari.
+The core idea that it tries not to consume unnecessary ram by tokenizing the entire file.
+Instead it takes the file as a stream and works through it line by line via std::newline
+This fact is also abstracted by a bunch of helpers. Most importantly, advance_character()
+which returns true when getting next character was successful and false when it failed.
+Under the hood it handles getting the next line, returning false if there isn't one (EOF),
+as well as handling cursor_column and cursor_line. Another byproduct of the stream approach
+is that we don't generate a full std::vector<Token> or anything like that, but instead just
+spit out the next token when something (probably the parser) calls advance(). advance() will
+always return a valid token until token with TokenType::FINISH is emitted. Everything beyond
+that will probably keep returning FINISH, but this is not "reglamented" at all, let's call
+"undefined behavior" :) Meaning, when parser gets the first FINISH, it needs to stop using
+this tokenizer and just destruct it - it did its thing
+*/
 Tokenizer::Tokenizer(std::string path){
     file.open(path, std::ios::binary);
 
@@ -13,11 +27,13 @@ Tokenizer::Tokenizer(std::string path){
     }
     //getting first line
     std::getline(file,line);
-    if(!line.empty() && line.back() == '\r')
+    if(!line.empty() && line.back() == '\r') //getting rid of \r's for simpler tokenization
     line.pop_back();
-    line+='\n';
+    line+='\n'; //but we're adding \n's "back" since getline strips them away
+    //and we need \n's to parse linebreak tokens (act as ;)
 
-    indent_stack.push(0);
+    indent_stack.push(0); //this is so that there is always something in the stack to
+    //compare to. So if some line gets indent of say 4, it can check 4>0 and push indent here
 }
 Tokenizer::~Tokenizer(){
     file.close();
@@ -29,6 +45,7 @@ bool Tokenizer::advance_character() {
         if(!std::getline(file, line)) {
             return false;
         }
+        //\r and \n stuff is same as in constructor
         if(!line.empty() && line.back() == '\r')
         line.pop_back();
 
@@ -40,7 +57,8 @@ bool Tokenizer::advance_character() {
     return true;
 }
 std::optional<char> Tokenizer::peek_character(int amount){
-    //if line ends then nah
+    //if line ends peeking fails. tokens generally shouldn't span multiple lines so it's fine
+    //not doing so adds complexity and having to make line buffers so I just impose this here
     if(line.length() <= cursor_column + amount){ 
         return std::nullopt;
     }
@@ -48,6 +66,8 @@ std::optional<char> Tokenizer::peek_character(int amount){
     return line[cursor_column+amount];
 }
 std::optional<Token> Tokenizer::check_singlechars(){
+    //only consumes stuff when it actually finds a token
+    //by the way it parses 1 and 2 char tokens so name is misleading but oh well
     switch(line[cursor_column]){
         case '{':
             return make_token("{",TokenType::LEFT_BRACE, 1);
@@ -207,7 +227,10 @@ Token Tokenizer::make_token(std::string lexeme, TokenType type, uint8_t length){
     return t;
 }
 std::string Tokenizer::parse_keyword(){
-    
+    //one limitation imposed here is no numbers in identifiers
+    //will probably go in and fix it later cause thing1 and thing2 situations happen
+    //also bad for low level stuff like c++'s log2(), if something like that will ever be here
+    //this is probably a crazy simple fix though
     if(!std::isalpha(line[cursor_column]) && !(line[cursor_column]=='_')){
         return "";
     }
@@ -230,11 +253,13 @@ std::string Tokenizer::parse_keyword(){
     return parsed;
 }
 Token Tokenizer::advance(){
+    //first thing is checking buffer queue. it's mostly for when there's multiple dedents
     if(!buffered_tokens.empty()){
         Token token = buffered_tokens.front();
         buffered_tokens.pop();
         return token;
     }
+    //shutoff flag is set to true on EOF to prevent further checks
     if(shutoff){
         //check for dedents on EOF
         while(indent_stack.size() > 1){
@@ -247,11 +272,8 @@ Token Tokenizer::advance(){
         return result;
     }
     
-
     //parse indent if start of line
-    if(cursor_column == 0 && line[cursor_column] != '\n'){ //if line is empty skip allat
-        
-        
+    if(cursor_column == 0 && line[cursor_column] != '\n'){ //if line is empty skip allat    
         uint8_t spaces = 0;
         uint8_t chars = 0;
         while(line[cursor_column] == ' ' || line[cursor_column] == '\t'){
@@ -265,7 +287,6 @@ Token Tokenizer::advance(){
                 advance_character();
             }
         }
-        std::cout << "On line "<<cursor_line<<" found indent of "<<+spaces<<std::endl;
         if(spaces > indent_stack.top()){
             indent_stack.push(spaces);
             return make_token("INDENT",TokenType::INDENT, chars);
@@ -280,9 +301,11 @@ Token Tokenizer::advance(){
             return token;
         }
     }
+    //after parsing indents, further spaces are ignored
     while(line[cursor_column] == ' '){
         advance_character();
     }
+    //hacked thing to skip until \n for comms
     if(line[cursor_column] == '#'){
         while(line[cursor_column] != '\n' && advance_character()){}
     }
@@ -296,7 +319,7 @@ Token Tokenizer::advance(){
             return single_result.value();
         }
     }
-    
+    //keyword lexing of doom and despair
     std::string keyword = parse_keyword();
     if(keyword == "func"){
         return make_token("func",TokenType::FUNC,4);
@@ -329,6 +352,8 @@ Token Tokenizer::advance(){
     }else if(keyword == "var"){
         return make_token("var",TokenType::VAR,3);
     }else if(keyword != ""){
+        //if word but not word i know -> identifier
+        //this makes types also identifiers since types are class names
         return make_token(keyword, TokenType::IDENTIFIER, keyword.length());
     }
     auto literal = check_literals();

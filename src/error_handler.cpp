@@ -1,6 +1,6 @@
 #include "error_handler.h"
 #include <iostream>
-
+//this always just shows error type, message and where it is
 void ErrorHandler::report_error(CompilerError err){
     std::cerr << "\033[31m" << "[" << err.type << " Error] " << "on line "<< +err.line_number+1
     << ": " << err.message << "\033[0m"<< std::endl;

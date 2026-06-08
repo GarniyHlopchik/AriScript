@@ -2,6 +2,7 @@ add_library(ari_lib STATIC
     error_handler.cpp
     interpreter.cpp
     tokenizer.cpp
+    debug.cpp
 )
 
 target_include_directories(ari_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../include)
