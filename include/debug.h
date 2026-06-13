@@ -4,8 +4,9 @@
 #include <vector>
 #include <stdint.h>
 #include <string>
+#include "chunk.h"
 
-void disassembleChunk(std::vector<uint8_t> chunk, const std::string& name);
-int disassembleInstruction(std::vector<uint8_t> chunk, int offset);
+void disassembleChunk(Chunk& chunk, const std::string& name);
+int disassembleInstruction(Chunk& chunk, int offset);
 
 #endif

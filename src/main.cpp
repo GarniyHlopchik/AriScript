@@ -15,9 +15,11 @@ int main(int argc, char* argv[]){
         }
     }
     */
-    std::vector<uint8_t> chunk;
-    chunk.push_back(static_cast<uint8_t>(OpCode::OP_RETURN));
-    chunk.push_back(3);
+    Chunk chunk;
+    chunk.code.push_back(static_cast<uint8_t>(OpCode::OP_RETURN));
+    chunk.code.push_back(static_cast<uint8_t>(OpCode::OP_CONSTANT));
+    chunk.code.push_back(0);
+    chunk.constants.push_back(67);
     disassembleChunk(chunk, "return_test");
     return 0;
 
