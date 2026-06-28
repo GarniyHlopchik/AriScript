@@ -12,25 +12,26 @@
 #include <queue>
 #include <stdint.h>
 #include <fstream>
+#include <sstream>
 enum class TokenType{
     // Single-character tokens and formatting.
     LEFT_PAREN, RIGHT_PAREN, LEFT_BRACE, RIGHT_BRACE, COLON,
     COMMA, DOT, MINUS, PLUS, SHARP, MUL, DIV, INDENT, DEDENT, LINEBREAK,
     INC, DEC,
 
-    // One or two character tokens.
+    // One or two character tokens. 17
     EQUAL, EQUAL_EQUAL,
     GREATER, GREATER_EQUAL,
     LESS, LESS_EQUAL, ARROW,
     MINUS_EQUAL, PLUS_EQUAL, MUL_EQUAL, DIV_EQUAL,
 
-    // Literals.
+    // Literals. 28
     IDENTIFIER, STRING, INT, FLOAT, BOOL,
 
-    // Keywords.
+    // Keywords. 33
     AND, CLASS, ELSE, FUNC, FOR, IF, NIL, OR, NOT, IN,
     RETURN, SUPER, THIS, VAR, WHILE, IMPORT, EXPORT,
-
+    //50
     FINISH
 };
 using Literal = std::variant<std::monostate, double, std::string, bool, int>;
@@ -40,9 +41,9 @@ struct Token{
     Literal literal; //null, double, string, bool, int parsed
     uint32_t line;    //if you make 4B line files I'll personally end you
     uint16_t column; //same with 65k character lines
-    uint8_t length;  //I mean 255 character identifiers? I don't think so
+    uint16_t length;  //65k for len cause long text strings might be > 255
     std::string to_string(){
-        return std::to_string(static_cast<int>(type)) + " " + lexeme + " " + literal_to_string();
+        return lexeme + " " + literal_to_string();
     }
     std::string literal_to_string(){
         if (std::holds_alternative<double>(literal)) {
@@ -65,7 +66,7 @@ struct Token{
 };
 class Tokenizer{
     public:
-        Tokenizer(std::string path);
+        Tokenizer(std::string path, bool is_from_string);
         
         Token advance();
         ~Tokenizer();
@@ -82,8 +83,10 @@ class Tokenizer{
         uint32_t cursor_line = 0;
         uint16_t cursor_column = 0;
 
+        bool is_from_string = false;
         std::ifstream file;
         std::string line = "";
+        std::stringstream code_stringstream; //only used when code is from string
         std::stack<uint16_t> indent_stack;
         std::queue<Token> buffered_tokens;
         bool shutoff = false;

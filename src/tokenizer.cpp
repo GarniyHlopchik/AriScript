@@ -18,32 +18,59 @@ that will probably keep returning FINISH, but this is not "reglamented" at all, 
 "undefined behavior" :) Meaning, when parser gets the first FINISH, it needs to stop using
 this tokenizer and just destruct it - it did its thing
 */
-Tokenizer::Tokenizer(std::string path){
-    file.open(path, std::ios::binary);
 
-    if (!file.is_open()) {
-        std::cerr << "Could not open the file in path: " << path << std::endl;
-        return;
+Tokenizer::Tokenizer(std::string path, bool is_from_string = false) : is_from_string(is_from_string){
+    
+
+    indent_stack.push(0); //this is so that there is always something in the stack to
+    //compare to. So if some line gets indent of say 4, it can check 4>0 and push indent here
+    
+    //stupid code for load from string cause I haven't thought of it initially
+    //if is_from_string is true, path is not really path, but a source code string
+    //in that case 'file' (a filestream) is never initialized
+    if(is_from_string){
+        code_stringstream.str(path);
+        
+    }else{
+
+        file.open(path, std::ios::binary);
+
+        if (!file.is_open()) {
+            std::cerr << "Could not open the file in path: " << path << std::endl;
+            return;
+        }
     }
     //getting first line
-    std::getline(file,line);
+    if(is_from_string){
+        std::getline(code_stringstream,line);
+    }
+    else{
+        std::getline(file,line);
+    }
     if(!line.empty() && line.back() == '\r') //getting rid of \r's for simpler tokenization
     line.pop_back();
     line+='\n'; //but we're adding \n's "back" since getline strips them away
     //and we need \n's to parse linebreak tokens (act as ;)
 
-    indent_stack.push(0); //this is so that there is always something in the stack to
-    //compare to. So if some line gets indent of say 4, it can check 4>0 and push indent here
+    
 }
 Tokenizer::~Tokenizer(){
-    file.close();
+    if(!is_from_string){
+        file.close();
+    }
 }
 
 bool Tokenizer::advance_character() {
     cursor_column += 1;
     if(cursor_column >= line.length()) {
-        if(!std::getline(file, line)) {
-            return false;
+        if(is_from_string){
+            if(!std::getline(code_stringstream, line)) {
+                return false;
+            }
+        }else{
+            if(!std::getline(file, line)) {
+                return false;
+            }
         }
         //\r and \n stuff is same as in constructor
         if(!line.empty() && line.back() == '\r')
@@ -54,6 +81,7 @@ bool Tokenizer::advance_character() {
         cursor_line += 1;
         cursor_column = 0;
     }
+    
     return true;
 }
 std::optional<char> Tokenizer::peek_character(int amount){
@@ -168,7 +196,7 @@ std::optional<Token> Tokenizer::check_literals(){
             shutoff = true;
         }
         return Token{.type=TokenType::STRING, .lexeme=parsed, .literal=parsed, .line = cursor_line,
-        .column = cursor_column, .length = parsed.length()};
+        .column = cursor_column, .length = static_cast<uint16_t>(parsed.length())};
     }
     //check number
     if(std::isdigit(line[cursor_column])){
@@ -186,9 +214,9 @@ std::optional<Token> Tokenizer::check_literals(){
         }
         if(is_float){
             try {
-                float f = std::stof(parsed);
+                double f = std::stod(parsed);
                 return Token{.type=TokenType::FLOAT, .lexeme=parsed, .literal=f, 
-                    .line = cursor_line, .column = cursor_column, .length = parsed.length()};
+                    .line = cursor_line, .column = cursor_column, .length = static_cast<uint16_t>(parsed.length())};
             } catch (const std::invalid_argument& e) {
                 ErrorHandler::report_error({.type = "TokenizerError", .line_number=cursor_line,
                 .column = cursor_column, .line = line, .message = "Float literal is invalid"});
@@ -196,11 +224,11 @@ std::optional<Token> Tokenizer::check_literals(){
                 ErrorHandler::report_error({.type = "TokenizerError", .line_number=cursor_line,
                 .column = cursor_column, .line = line, .message = "Float literal is out of range"});
             }
-        }else{
+        }else if(parsed != ""){
             try {
                 int i = std::stoi(parsed);
                 return Token{.type=TokenType::INT, .lexeme=parsed, .literal=i, 
-                    .line = cursor_line, .column = cursor_column, .length = parsed.length()};
+                    .line = cursor_line, .column = cursor_column, .length = static_cast<uint16_t>(parsed.length())};
             } catch (const std::invalid_argument& e) {
                 ErrorHandler::report_error({.type = "TokenizerError", .line_number=cursor_line,
                 .column = cursor_column, .line = line, .message = "Int literal is invalid"});
@@ -209,17 +237,52 @@ std::optional<Token> Tokenizer::check_literals(){
                 .column = cursor_column, .line = line, .message = "Int literal is out of range"});
             }
         }
+        else{
         //check bool
-        std::string keyword = parse_keyword();
-        if(keyword == "true"){
+            // std::string keyword = parse_keyword();
+            // if(keyword == "true"){
+            //     return Token{.type=TokenType::BOOL, .lexeme="true", .literal=true, 
+            //         .line = cursor_line, .column = cursor_column, .length = 4};
+            // }else if(keyword == "false"){
+            //     return Token{.type=TokenType::BOOL, .lexeme="false", .literal=false, 
+            //         .line = cursor_line, .column = cursor_column, .length = 5};
+            // }
+
+            
+        }
+    }else{
+        //apparently this logic never worked and just would fallback to iden
+        //moreover this would consume a word that might not be right
+        //so this is a rewrite that doesn't consume until it's sure
+        if(!std::isalpha(line[cursor_column])){
+            return std::nullopt;
+        }
+        uint8_t i = 1;
+        std::string parsed = "";
+        parsed += line[cursor_column];
+        while(std::isalnum(peek_character(i).value())){
+            if(!peek_character(i)){
+                shutoff = true;
+                break;
+            }
+            parsed += peek_character(i).value();
+            i+=1;
+        }
+        if(parsed == "true"){
+            for(int a = 0; a < 4; a++){
+                advance_character();                }
             return Token{.type=TokenType::BOOL, .lexeme="true", .literal=true, 
-                .line = cursor_line, .column = cursor_column, .length = 4};
-        }else if(keyword == "false"){
+                 .line = cursor_line, .column = cursor_column, .length = 4};
+        }else if(parsed == "false"){
+            for(int a = 0; a < 5; a++){
+                advance_character();
+            }
             return Token{.type=TokenType::BOOL, .lexeme="false", .literal=false, 
                 .line = cursor_line, .column = cursor_column, .length = 5};
         }
         return std::nullopt;
     }
+    return std::nullopt;
 }
 Token Tokenizer::make_token(std::string lexeme, TokenType type, uint8_t length){
     Token t{.type = type, .lexeme = lexeme, 
@@ -227,10 +290,9 @@ Token Tokenizer::make_token(std::string lexeme, TokenType type, uint8_t length){
     return t;
 }
 std::string Tokenizer::parse_keyword(){
-    //one limitation imposed here is no numbers in identifiers
-    //will probably go in and fix it later cause thing1 and thing2 situations happen
-    //also bad for low level stuff like c++'s log2(), if something like that will ever be here
-    //this is probably a crazy simple fix though
+    //keyword names now probably can have number though not as first symbol
+    //and not tested
+    
     if(!std::isalpha(line[cursor_column]) && !(line[cursor_column]=='_')){
         return "";
     }
@@ -238,10 +300,10 @@ std::string Tokenizer::parse_keyword(){
     std::string parsed = "";
     parsed += observed;
     int i = 1;
-    while(std::isalpha(observed) || observed == '_'){
+    while(std::isalnum(observed) || observed == '_'){
         auto next = peek_character(i);
         if(!next) break;
-        if(!(std::isalpha(next.value()) || next.value() == '_')) break;
+        if(!(std::isalnum(next.value()) || next.value() == '_')) break;
         observed = *next;
         i+=1;
         parsed += observed;
@@ -319,6 +381,12 @@ Token Tokenizer::advance(){
             return single_result.value();
         }
     }
+
+    //checking literals before keywords so that true and false don't parse as identifiers
+    auto literal = check_literals();
+    if(literal){
+        return literal.value();
+    }
     //keyword lexing of doom and despair
     std::string keyword = parse_keyword();
     if(keyword == "func"){
@@ -354,12 +422,12 @@ Token Tokenizer::advance(){
     }else if(keyword != ""){
         //if word but not word i know -> identifier
         //this makes types also identifiers since types are class names
+        //also this specific thing is the reason why we check for literals before identifiers
+        //cause it would fallback to this as true is a word but not valid keyword
         return make_token(keyword, TokenType::IDENTIFIER, keyword.length());
     }
-    auto literal = check_literals();
-    if(literal){
-        return literal.value();
-    }
+    std::cout << "No keyword parsed" << std::endl;
+    
 
     return make_token("FINISH",TokenType::FINISH, 1);
 }

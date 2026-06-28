@@ -11,7 +11,9 @@ FetchContent_MakeAvailable(googletest)
 add_executable(unit_tests test_main.cpp)
 
 target_link_libraries(unit_tests 
-    GTest::gtest_main 
+    gtest
+    gtest_main 
+    gmock
     ari_lib
 )
 
