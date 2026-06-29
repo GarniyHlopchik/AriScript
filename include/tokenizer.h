@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <fstream>
 #include <sstream>
+#include "def_literal.h"
 enum class TokenType{
     // Single-character tokens and formatting.
     LEFT_PAREN, RIGHT_PAREN, LEFT_BRACE, RIGHT_BRACE, COLON,
@@ -34,7 +35,7 @@ enum class TokenType{
     //50
     FINISH
 };
-using Literal = std::variant<std::monostate, double, std::string, bool, int>;
+
 struct Token{
     TokenType type;
     std::string lexeme; //just factual symbols

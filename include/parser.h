@@ -2,9 +2,7 @@
 #define ARI_PARSER_IMPLEMENTATION
 
 #include "tokenizer.h"
-
-class Expression{};
-
+#include "ast.h"
 class Parser{
     private:
         Token consume();
